@@ -90,5 +90,6 @@ A continuación, puedes lanzar el software con hebras con `./n_en_raya`, o sin h
 
 
 ## Más información
-Hemos creado un [fichero con preguntas frecuentes](./FAQ.md) que han ido apareciendo en las distintas sesiones de prácticas.
+Hemos creado un [fichero con preguntas frecuentes](./FAQ.md) que han ido apareciendo en las distintas sesiones de práctica
 
+prueba
