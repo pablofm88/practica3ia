@@ -74,6 +74,19 @@ namespace {
 
         return valor;
     }
+
+    bool esMovimientoValido(const Tablero& tablero, std::pair<int, int> mov) {
+        Tablero copia = tablero;
+        return copia.ponerPieza(mov.first, mov.second, tablero.getJugadorTurno());
+    }
+
+    std::pair<int, int> primerMovimientoValido(const Tablero& tablero) {
+        auto sucesores = tablero.getSucesoresConMovimientos();
+        for (const auto& sucesor : sucesores) {
+            if (esMovimientoValido(tablero, sucesor.second)) return sucesor.second;
+        }
+        return {-1, -1};
+    }
 }
 
 std::pair<int, int> SacarMovimiento(const Tablero& padre, const Tablero &hijo);
@@ -106,10 +119,10 @@ std::pair<int, int> AgenteEstudiante::think(const Tablero& tablero) {
 
     case ModoJuego::MINIMAX:
         {
-            auto sucesores = tablero.getSucesores();
-            if (!sucesores.empty()) mejor = SacarMovimiento(tablero, sucesores.front());
+            mejor = primerMovimientoValido(tablero);
         }
         minimax(tablero, 0, profundidadMax, mejor);
+        if (!esMovimientoValido(tablero, mejor)) mejor = primerMovimientoValido(tablero);
         return mejor;
         break; 
 
@@ -143,8 +156,8 @@ std::pair<int, int> SacarMovimiento(const Tablero& padre, const Tablero &hijo){
  */
 std::pair<int, int> AgenteEstudiante::JuegaAleatorio(const Tablero& tablero) {
 
-    // Calculo los tableros descendientes de tablero
-    auto sucesores = tablero.getSucesores();
+    // Calculo los tableros descendientes junto con la jugada que los genera.
+    auto sucesores = tablero.getSucesoresConMovimientos();
 
     // Si no tiene descendientes, paso el turno
     if (sucesores.empty()) return {-1, -1};
@@ -152,8 +165,7 @@ std::pair<int, int> AgenteEstudiante::JuegaAleatorio(const Tablero& tablero) {
     // Elijo aleatoriamente uno de los descendientes
     int elegido = rand() % sucesores.size();
 
-    // Saco el movimiento realizado comparando el tablero original con el elegido.
-    std::pair<int,int> Mov = SacarMovimiento(tablero, sucesores[elegido]);
+    std::pair<int,int> Mov = sucesores[elegido].second;
 
     return Mov;
 }
@@ -256,11 +268,10 @@ double AgenteEstudiante::minimax(const Tablero &tablero, int profundidad, int pr
  * @return La jugada elegida por el algoritmo de búsqueda.
  */
 std::pair<int, int> AgenteEstudiante::JuegaInteligente(const Tablero& tablero) {
-    std::pair<int,int> Mov = {-1, -1};
-    auto sucesores = tablero.getSucesores();
-    if (!sucesores.empty()) Mov = SacarMovimiento(tablero, sucesores.front());
+    std::pair<int,int> Mov = primerMovimientoValido(tablero);
 
     double valor = alfaBeta(tablero, 0, profundidadMax, MenosInfinito, MasInfinito, Mov);
+    if (!esMovimientoValido(tablero, Mov)) Mov = primerMovimientoValido(tablero);
     std::cout << "Valor Minimax: " << valor << "\tJugada: (" << Mov.first << ", " << Mov.second << ")\n";
     return Mov;
 }
