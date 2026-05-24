@@ -87,10 +87,6 @@ private:
     double heuristica1(const Tablero& tablero);
     double heuristica2(const Tablero& tablero);
 
-    bool esTerminal(const Tablero& tablero) const;
-    bool tiempoAgotado() const;
-    std::pair<int, int> mejorMovimientoRapido(const Tablero& tablero);
-
 
 };
 
