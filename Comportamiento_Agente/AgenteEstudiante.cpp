@@ -412,20 +412,7 @@ double AgenteEstudiante::minimax(const Tablero &tablero, int profundidad, int pr
  */
 std::pair<int, int> AgenteEstudiante::JuegaInteligente(const Tablero& tablero) {
     std::pair<int,int> Mov = primerMovimientoValido(tablero);
-    mejorMovimientoH = Mov;
-    double valor = heuristica(tablero);
-
-    for (int profundidad = 1; profundidad <= std::max(1, profundidadMax); ++profundidad) {
-        std::pair<int,int> movProfundidad = mejorMovimientoH;
-        double valorProfundidad = alfaBeta(tablero, 0, profundidad, MenosInfinito, MasInfinito, movProfundidad);
-
-        if (abortarBanda) break;
-        if (esMovimientoValido(tablero, movProfundidad)) {
-            valor = valorProfundidad;
-            Mov = movProfundidad;
-            mejorMovimientoH = Mov;
-        }
-    }
+    double valor = alfaBeta(tablero, 0, profundidadMax, MenosInfinito, MasInfinito, Mov);
 
     if (!esMovimientoValido(tablero, Mov)) Mov = primerMovimientoValido(tablero);
     std::cout << "Valor Minimax: " << valor << "\tJugada: (" << Mov.first << ", " << Mov.second << ")\n";
@@ -464,14 +451,16 @@ double AgenteEstudiante::alfaBeta(const Tablero &tablero, int profundidad, int p
     if (sucesores.empty()) return heuristica(tablero);
 
     bool maximizando = (tablero.getJugadorTurno() == id);
-    for (auto& sucesor : sucesores) {
-        sucesor.valorOrden = heuristica(sucesor.tablero);
-    }
+    if (numHeuristica != 0) {
+        for (auto& sucesor : sucesores) {
+            sucesor.valorOrden = heuristica(sucesor.tablero);
+        }
 
-    std::stable_sort(sucesores.begin(), sucesores.end(),
-        [maximizando](const SucesorConMovimiento& a, const SucesorConMovimiento& b) {
-            return maximizando ? a.valorOrden > b.valorOrden : a.valorOrden < b.valorOrden;
-        });
+        std::stable_sort(sucesores.begin(), sucesores.end(),
+            [maximizando](const SucesorConMovimiento& a, const SucesorConMovimiento& b) {
+                return maximizando ? a.valorOrden > b.valorOrden : a.valorOrden < b.valorOrden;
+            });
+    }
 
     if (profundidad == 0) Mov = sucesores.front().movimiento;
 
@@ -493,7 +482,7 @@ double AgenteEstudiante::alfaBeta(const Tablero &tablero, int profundidad, int p
             }
 
             alfa = std::max(alfa, mejorValor);
-            if (alfa >= beta) break;
+            if (alfa >= beta) return beta;
         }
 
         return mejorValor;
@@ -516,7 +505,7 @@ double AgenteEstudiante::alfaBeta(const Tablero &tablero, int profundidad, int p
         }
 
         beta = std::min(beta, mejorValor);
-        if (alfa >= beta) break;
+        if (alfa >= beta) return alfa;
     }
 
     return mejorValor;
@@ -596,9 +585,11 @@ double AgenteEstudiante::heuristica2(const Tablero& tablero) {
 
     int rival = rivalDe(id);
     int n = tablero.getNParaGanar();
-    double valor = heuristicaPrueba(tablero);
+    double valor = 0.0;
 
     valor += 0.45 * evaluarVentanas(tablero, id, false);
+    valor += 0.55 * evaluarControlPosicional(tablero, id);
+    valor += 0.30 * evaluarOpcionesEspeciales(tablero, id);
     if (n > 1) {
         valor += 1800.0 * tablero.contarCombinaciones(n - 1, id);
         valor -= 2200.0 * tablero.contarCombinaciones(n - 1, rival);
