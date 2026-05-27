@@ -185,6 +185,95 @@ namespace {
         return valor;
     }
 
+    bool celdaLibreParaAmenaza(const Tablero& tablero, int f, int c) {
+        if (f < 0 || f >= tablero.getFilas() || c < 0 || c >= tablero.getColumnas()) return false;
+        if (tablero.getCelda(f, c) != 0) return false;
+
+        auto tipo = tablero.getTipoCelda(f, c);
+        return tipo != Tablero::TipoCelda::ROJO && tipo != Tablero::TipoCelda::AMARILLO;
+    }
+
+    double factorBordeAmenaza(const Tablero& tablero, int f, int c, int longitud, int df, int dc) {
+        int finF = f + (longitud - 1) * df;
+        int finC = c + (longitud - 1) * dc;
+
+        bool tocaBorde = (f == 0 || f == tablero.getFilas() - 1 ||
+                          finF == 0 || finF == tablero.getFilas() - 1 ||
+                          c == 0 || c == tablero.getColumnas() - 1 ||
+                          finC == 0 || finC == tablero.getColumnas() - 1);
+
+        return tocaBorde ? 1.45 : 1.0;
+    }
+
+    double valorRachaAbierta(int longitud, int extremosLibres, bool esRival, double factorBorde) {
+        if (longitud < 2 || extremosLibres == 0) return 0.0;
+
+        double valor = 0.0;
+        if (longitud >= 4) {
+            valor = (extremosLibres == 2) ? 65000000.0 : 32000000.0;
+        } else if (longitud == 3) {
+            valor = (extremosLibres == 2) ? 9000000.0 : 3200000.0;
+        } else {
+            valor = (extremosLibres == 2) ? 260000.0 : 70000.0;
+        }
+
+        if (esRival) valor *= 1.55;
+        return valor * factorBorde;
+    }
+
+    double evaluarAmenazasAbiertas(const Tablero& tablero, int id) {
+        int rival = rivalDe(id);
+        const int df[] = {0, 1, 1, 1};
+        const int dc[] = {1, 0, 1, -1};
+        double valor = 0.0;
+
+        for (int f = 0; f < tablero.getFilas(); ++f) {
+            for (int c = 0; c < tablero.getColumnas(); ++c) {
+                int jugador = tablero.getCelda(f, c);
+                if (jugador == 0) continue;
+
+                for (int d = 0; d < 4; ++d) {
+                    int prevF = f - df[d];
+                    int prevC = c - dc[d];
+                    if (prevF >= 0 && prevF < tablero.getFilas() &&
+                        prevC >= 0 && prevC < tablero.getColumnas() &&
+                        tablero.getCelda(prevF, prevC) == jugador) {
+                        continue;
+                    }
+
+                    int longitud = 0;
+                    int nf = f;
+                    int nc = c;
+                    while (nf >= 0 && nf < tablero.getFilas() &&
+                           nc >= 0 && nc < tablero.getColumnas() &&
+                           tablero.getCelda(nf, nc) == jugador) {
+                        ++longitud;
+                        nf += df[d];
+                        nc += dc[d];
+                    }
+
+                    if (longitud < 2) continue;
+
+                    int extremosLibres = 0;
+                    if (celdaLibreParaAmenaza(tablero, prevF, prevC)) ++extremosLibres;
+                    if (celdaLibreParaAmenaza(tablero, nf, nc)) ++extremosLibres;
+
+                    bool esRival = (jugador == rival);
+                    double puntos = valorRachaAbierta(
+                        longitud,
+                        extremosLibres,
+                        esRival,
+                        factorBordeAmenaza(tablero, f, c, longitud, df[d], dc[d])
+                    );
+
+                    valor += esRival ? -puntos : puntos;
+                }
+            }
+        }
+
+        return valor;
+    }
+
     double evaluarOpcionesEspeciales(const Tablero& tablero, int id) {
         if (!esModoCompeticion(tablero)) return 0.0;
 
@@ -564,16 +653,17 @@ double AgenteEstudiante::heuristica1(const Tablero& tablero) {
     double valor = 0.0;
 
     valor += evaluarVentanas(tablero, id, true);
+    valor += evaluarAmenazasAbiertas(tablero, id);
     valor += evaluarControlPosicional(tablero, id);
     valor += evaluarOpcionesEspeciales(tablero, id);
 
     if (n > 2) {
-        valor += 220.0 * tablero.contarCombinaciones(n - 2, id);
-        valor -= 270.0 * tablero.contarCombinaciones(n - 2, rival);
+        valor += 900.0 * tablero.contarCombinaciones(n - 2, id);
+        valor -= 6500.0 * tablero.contarCombinaciones(n - 2, rival);
     }
     if (n > 1) {
-        valor += 6000.0 * tablero.contarCombinaciones(n - 1, id);
-        valor -= 7600.0 * tablero.contarCombinaciones(n - 1, rival);
+        valor += 18000.0 * tablero.contarCombinaciones(n - 1, id);
+        valor -= 125000.0 * tablero.contarCombinaciones(n - 1, rival);
     }
 
     return valor;
