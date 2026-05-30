@@ -4,7 +4,6 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
-#include <functional>
 #include <cstdlib>
 
 std::pair<int, int> SacarMovimiento(const Tablero& padre, const Tablero &hijo);
@@ -87,21 +86,29 @@ namespace {
     }
 
     double factorHuecosEspeciales(int rojos, int amarillos, int verdes, int direccion) {
+        const double PENALIZACION_ROJA = 0.18;
+        const double BONUS_VERDE = 1.10;
+        const double PENALIZACION_AMARILLA_RECTA = 0.30;
+        const double PENALIZACION_AMARILLA_DIAGONAL = 0.75;
+
         double factor = 1.0;
 
-        if (rojos > 0) factor *= 0.18;
-        if (verdes > 0) factor *= 1.10;
+        if (rojos > 0) factor *= PENALIZACION_ROJA;
+        if (verdes > 0) factor *= BONUS_VERDE;
 
-        // Las bombas rompen con especial dureza las amenazas horizontales y verticales.
+        // Las bombas fastidian mas las lineas rectas.
         if (amarillos > 0) {
-            if (direccion == 0 || direccion == 1) factor *= 0.30;
-            else factor *= 0.75;
+            if (direccion == 0 || direccion == 1) factor *= PENALIZACION_AMARILLA_RECTA;
+            else factor *= PENALIZACION_AMARILLA_DIAGONAL;
         }
 
         return factor;
     }
 
     double evaluarVentanas(const Tablero& tablero, int id, bool avanzada) {
+        const double PENALIZACION_RIVAL_AVANZADA = 1.28;
+        const double PENALIZACION_RIVAL_NORMAL = 1.12;
+
         int rival = rivalDe(id);
         int filas = tablero.getFilas();
         int columnas = tablero.getColumnas();
@@ -153,7 +160,7 @@ namespace {
                         double puntos = pesoLinea(suyas, n) * factorEspecial;
                         if (suyas == n - 1 && libres == 1) puntos += 1500000.0 * factorEspecial;
                         else if (suyas == n - 2 && libres >= 2) puntos += 55000.0 * factorEspecial;
-                        valor -= (avanzada ? 1.28 : 1.12) * puntos;
+                        valor -= (avanzada ? PENALIZACION_RIVAL_AVANZADA : PENALIZACION_RIVAL_NORMAL) * puntos;
                     }
                 }
             }
@@ -163,6 +170,10 @@ namespace {
     }
 
     double evaluarControlPosicional(const Tablero& tablero, int id) {
+        const double FACTOR_DISTANCIA = 1.7;
+        const double PESO_PROPIO = 9.0;
+        const double PESO_RIVAL = 9.5;
+
         int rival = rivalDe(id);
         int filas = tablero.getFilas();
         int columnas = tablero.getColumnas();
@@ -176,9 +187,9 @@ namespace {
                 if (celda == 0) continue;
 
                 double distancia = std::abs(f - centroF) + std::abs(c - centroC);
-                double posicion = (filas + columnas) - 1.7 * distancia;
-                if (celda == id) valor += 9.0 * posicion;
-                else if (celda == rival) valor -= 9.5 * posicion;
+                double posicion = (filas + columnas) - FACTOR_DISTANCIA * distancia;
+                if (celda == id) valor += PESO_PROPIO * posicion;
+                else if (celda == rival) valor -= PESO_RIVAL * posicion;
             }
         }
 
@@ -206,6 +217,8 @@ namespace {
     }
 
     double valorRachaAbierta(int longitud, int extremosLibres, bool esRival, double factorBorde) {
+        const double FACTOR_RACHA_RIVAL = 1.55;
+
         if (longitud < 2 || extremosLibres == 0) return 0.0;
 
         double valor = 0.0;
@@ -217,7 +230,7 @@ namespace {
             valor = (extremosLibres == 2) ? 260000.0 : 70000.0;
         }
 
-        if (esRival) valor *= 1.55;
+        if (esRival) valor *= FACTOR_RACHA_RIVAL;
         return valor * factorBorde;
     }
 
@@ -358,12 +371,7 @@ std::pair<int, int> AgenteEstudiante::think(const Tablero& tablero) {
 }
 
 
-/**
- * @brief Compara dos tableros para identificar cuál ha sido el movimiento realizado.
- * @param padre Estado inicial del tablero.
- * @param hijo Estado resultante tras un movimiento.
- * @return Un par (fila, columna) con la posición de la nueva pieza.
- */
+// Busca la casilla que ha cambiado entre un tablero y su hijo.
 std::pair<int, int> SacarMovimiento(const Tablero& padre, const Tablero &hijo){
     for(int f=0; f<padre.getFilas(); ++f)
         for(int c=0; c<padre.getColumnas(); ++c)
@@ -372,36 +380,26 @@ std::pair<int, int> SacarMovimiento(const Tablero& padre, const Tablero &hijo){
     return {-1, -1};
 }
 
-/**
- * @brief Implementa un agente que juega de forma totalmente aleatoria.
- * @param tablero Estado actual del juego.
- * @return La jugada elegida al azar.
- */
+// Modo sencillo: elegir uno de los sucesores al azar.
 std::pair<int, int> AgenteEstudiante::JuegaAleatorio(const Tablero& tablero) {
 
-    // Calculo los tableros descendientes de tablero
+    // Calculo los tableros descendientes.
     auto sucesores = tablero.getSucesores();
 
-    // Si no tiene descendientes, paso el turno
+    // Si no hay movimientos, toca pasar.
     if (sucesores.empty()) return {-1, -1};
 
-    // Elijo aleatoriamente uno de los descendientes
+    // Elijo aleatoriamente uno de ellos.
     int elegido = rand() % sucesores.size();
 
-    // Saco el movimiento realizado comparando el tablero original con el elegido.
+    // Recupero la jugada comparando los dos tableros.
     std::pair<int,int> Mov = SacarMovimiento(tablero, sucesores[elegido]);
 
     return Mov;
 }
 
 
-/**
- * @brief Algoritmo de resolución completa para estados de final de juego.
- * Determina si una posición está matemáticamente ganada, perdida o empatada.
- * @param tablero Estado a evaluar.
- * @param Mov [Salida] La jugada óptima encontrada.
- * @return Resultado del análisis (VICTORIA, DERROTA o EMPATE).
- */
+// Resolucion exacta para posiciones pequenas o finales.
 AgenteEstudiante::Resultado AgenteEstudiante::Status(const Tablero &tablero, std::pair<int,int> &Mov) {
     /* ============== Este trozo de código se tiene que quedar aquí  =============== */
     nodosVisitados++;
@@ -444,14 +442,7 @@ AgenteEstudiante::Resultado AgenteEstudiante::Status(const Tablero &tablero, std
 
 
 
-/**
- * @brief Implementación del algoritmo Minimax clásico.
- * @param tablero Estado actual.
- * @param profundidad Nivel actual en el árbol de búsqueda.
- * @param prof_Max Límite de profundidad de la búsqueda.
- * @param Mov [Salida] La mejor jugada encontrada en la raíz.
- * @return Valor heurístico del estado.
- */
+// Minimax normal, sin poda.
 double AgenteEstudiante::minimax(const Tablero &tablero, int profundidad, int prof_Max, std::pair<int,int> &Mov) {
     /* ============== Este trozo de código se tiene que quedar aquí  =============== */
     nodosVisitados++;
@@ -468,7 +459,7 @@ double AgenteEstudiante::minimax(const Tablero &tablero, int profundidad, int pr
     if (profundidad >= prof_Max) return heuristica(tablero);
 
     auto sucesores = obtenerSucesores(tablero);
-    if (sucesores.empty()) return heuristica(tablero);
+    if (sucesores.empty()) return valorTerminal(tablero, id, profundidad);
 
     bool maximizando = (tablero.getJugadorTurno() == id);
     double mejorValor = maximizando ? MenosInfinito : MasInfinito;
@@ -494,11 +485,7 @@ double AgenteEstudiante::minimax(const Tablero &tablero, int profundidad, int pr
 }
 
 
-/**
- * @brief Punto de entrada para el juego inteligente.
- * @param tablero Estado actual del juego.
- * @return La jugada elegida por el algoritmo de búsqueda.
- */
+// Modo principal: alfa-beta y comprobacion final de que la jugada sea legal.
 std::pair<int, int> AgenteEstudiante::JuegaInteligente(const Tablero& tablero) {
     std::pair<int,int> Mov = primerMovimientoValido(tablero);
     double valor = alfaBeta(tablero, 0, profundidadMax, MenosInfinito, MasInfinito, Mov);
@@ -511,16 +498,7 @@ std::pair<int, int> AgenteEstudiante::JuegaInteligente(const Tablero& tablero) {
 
 
 
-/**
- * @brief Implementación del algoritmo Minimax con Poda Alfa-Beta.
- * @param tablero Estado actual.
- * @param profundidad Nivel actual en el árbol de búsqueda.
- * @param prof_Max Límite de profundidad de la búsqueda.
- * @param alfa Valor mínimo garantizado para el jugador MAX.
- * @param beta Valor máximo garantizado para el jugador MIN.
- * @param Mov [Salida] La mejor jugada encontrada en la raíz.
- * @return Valor heurístico del estado tras la poda.
- */
+// Minimax con poda alfa-beta.
 double AgenteEstudiante::alfaBeta(const Tablero &tablero, int profundidad, int prof_Max, double alfa, double beta, std::pair<int,int> &Mov) {
     /* ============== Este trozo de código se tiene que quedar aquí  =============== */
     nodosVisitados++;
@@ -537,7 +515,7 @@ double AgenteEstudiante::alfaBeta(const Tablero &tablero, int profundidad, int p
     if (profundidad >= prof_Max) return heuristica(tablero);
 
     auto sucesores = obtenerSucesores(tablero);
-    if (sucesores.empty()) return heuristica(tablero);
+    if (sucesores.empty()) return valorTerminal(tablero, id, profundidad);
 
     bool maximizando = (tablero.getJugadorTurno() == id);
     if (numHeuristica != 0) {
@@ -545,10 +523,19 @@ double AgenteEstudiante::alfaBeta(const Tablero &tablero, int profundidad, int p
             sucesor.valorOrden = heuristica(sucesor.tablero);
         }
 
-        std::stable_sort(sucesores.begin(), sucesores.end(),
-            [maximizando](const SucesorConMovimiento& a, const SucesorConMovimiento& b) {
-                return maximizando ? a.valorOrden > b.valorOrden : a.valorOrden < b.valorOrden;
-            });
+        for (int i = 1; i < static_cast<int>(sucesores.size()); ++i) {
+            SucesorConMovimiento actual = sucesores[i];
+            int j = i - 1;
+
+            while (j >= 0 &&
+                   (maximizando ? sucesores[j].valorOrden < actual.valorOrden
+                                : sucesores[j].valorOrden > actual.valorOrden)) {
+                sucesores[j + 1] = sucesores[j];
+                --j;
+            }
+
+            sucesores[j + 1] = actual;
+        }
     }
 
     if (profundidad == 0) Mov = sucesores.front().movimiento;
@@ -600,11 +587,7 @@ double AgenteEstudiante::alfaBeta(const Tablero &tablero, int profundidad, int p
     return mejorValor;
 }
 
-/**
- * @brief Función heurística para evaluar la calidad de un tablero.
- * @param tablero Estado a evaluar.
- * @return Puntuación numérica (positiva para ventaja de J1, negativa para J2).
- */
+// Elige la heuristica activa.
 double AgenteEstudiante::heuristica(const Tablero& tablero) {
     switch(numHeuristica) {
         case 0: return heuristicaPrueba(tablero);
@@ -673,13 +656,17 @@ double AgenteEstudiante::heuristica2(const Tablero& tablero) {
     int ganador = tablero.comprobarGanador();
     if (ganador != 0) return valorTerminal(tablero, id, 0);
 
+    const double PESO_VENTANAS = 0.45;
+    const double PESO_POSICION = 0.55;
+    const double PESO_ESPECIALES = 0.30;
+
     int rival = rivalDe(id);
     int n = tablero.getNParaGanar();
     double valor = 0.0;
 
-    valor += 0.45 * evaluarVentanas(tablero, id, false);
-    valor += 0.55 * evaluarControlPosicional(tablero, id);
-    valor += 0.30 * evaluarOpcionesEspeciales(tablero, id);
+    valor += PESO_VENTANAS * evaluarVentanas(tablero, id, false);
+    valor += PESO_POSICION * evaluarControlPosicional(tablero, id);
+    valor += PESO_ESPECIALES * evaluarOpcionesEspeciales(tablero, id);
     if (n > 1) {
         valor += 1800.0 * tablero.contarCombinaciones(n - 1, id);
         valor -= 2200.0 * tablero.contarCombinaciones(n - 1, rival);
